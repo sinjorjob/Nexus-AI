@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus AI</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@2.3.3/dist/purify.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+        
+        :root {
+            --accenture-purple: #A100FF;
+            --accenture-light-purple: #B84BFF;
+            --accenture-dark-purple: #6F00B3;
+            --accenture-black: #000000;
+        }
+
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background: linear-gradient(135deg, #2c2c2c, #323232, #383838);
+            color: #e0e0e0;
+            overflow-x: hidden;
+        }
+        
+        #background-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+        
+        .container {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .chat-container {
+            
+            height: calc(100vh - 300px);
+            display: flex;
+            flex-direction: column;
+            background-color: rgb(255, 255, 255);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .chat-messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+        
+        .message {
+            max-width: 80%;
+            margin-bottom: 1.5rem;
+            padding: 1.25rem 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .user-message {
+             background-color: #A100FF;
+            color: #f8f7fb;
+            margin-left: auto;
+            border-bottom-right-radius: 0;
+        }
+        
+        .agent-message {
+            background-color: rgba(247, 247, 219, 0.948);
+            border-left: 4px solid var(--accenture-light-purple);
+            color: #0e011e;
+            border-bottom-left-radius: 0;
+            border-left: 4px solid var(--accenture-purple);
+        }
+        
+        #chat-form {
+            background-color: rgb(255, 255, 255);
+            border-top: 1px solid #444;
+            padding: 1rem;
+            border-radius: 0 0 12px 12px;
+        }
+        
+        #user-input {
+            background-color: rgb(238, 238, 238);
+            border: 1px solid #444;
+            color: #1b1a1a;
+            transition: all 0.3s ease;
+        }
+        
+        #user-input:focus {
+            border-color: var(--accenture-purple);
+            box-shadow: 0 0 0 2px rgba(161, 0, 255, 0.2);
+        }
+        
+        .submit-button {
+            background-color: var(--accenture-purple);
+            transition: all 0.3s ease;
+        }
+        
+        .submit-button:hover {
+            background-color: var(--accenture-dark-purple);
+        }
+
+        /* Markdown styles */
+        .message-content {
+            line-height: 1.6;
+        }
+
+        .message-content h1, .message-content h2, .message-content h3 {
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+            font-weight: bold;
+        }
+
+        .message-content h1 { font-size: 1.5em; }
+        .message-content h2 { font-size: 1.3em; }
+        .message-content h3 { font-size: 1.1em; }
+
+        .message-content ul, .message-content ol {
+            margin-left: 1.5em;
+            margin-bottom: 1em;
+        }
+
+        .message-content li {
+            margin-bottom: 0.5em;
+        }
+
+        .message-content code {
+            background-color: rgba(224, 224, 224, 0.2);
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+
+        .message-content pre {
+            background-color: rgba(240, 240, 240, 0.1);
+            padding: 1em;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin-bottom: 1em;
+        }
+
+        .message-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 1em;
+        }
+
+        .message-content th, .message-content td {
+            border: 1px solid #444;
+            padding: 0.5em;
+            text-align: left;
+        }
+
+        .message-content th {
+            background-color: var(--accenture-purple);
+            color: #ffffff;
+            font-weight: bold;
+        }
+
+        .message-content blockquote {
+            border-left: 4px solid var(--accenture-light-purple);
+            padding-left: 1em;
+            margin-left: 0;
+            color: #bbb;
+            font-style: italic;
+        }
+
+        .current-agent {
+            background: linear-gradient(135deg,  rgba(0, 0, 0, 0.2), 0 3px 6px rgba(0, 0, 0, 0.1));
+            color: white;
+            padding: 25px;
+            border-radius: 16px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2), 0 3px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            transition: all 0.5s ease;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        
+        .current-agent::before {
+            content: "";
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            transform: rotate(45deg);
+            transition: all 1s ease-out;
+            opacity: 0;
+        }
+        
+        .current-agent:hover::before {
+            opacity: 1;
+            transform: rotate(45deg) translate(50%, 50%);
+        }
+        
+        .current-agent:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3), 0 5px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .current-agent::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, var(--accenture-purple), var(--accenture-light-purple));
+            opacity: 0;
+            transition: opacity 1s ease-out;
+            z-index: 1;
+        }
+
+        .current-agent.highlight-animation::after {
+            opacity: 1;
+        }
+        .agent-icon {
+            width: 60px;
+            height: 60px;
+            margin-right: 20px;
+            background-color: transparent;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+            overflow: visible;
+        }
+        
+        .agent-icon svg {
+            width: 60px;
+            height: 60px;
+        }
+
+        .agent-info {
+            flex-grow: 1;
+            z-index: 2;
+        }
+
+        .agent-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .agent-name {
+            font-weight: bold;
+            font-size: 1.3em;
+        }
+
+        .agent-transfer {
+            background-color: rgba(183, 75, 255, 0.891);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            font-style: italic;
+            text-align: center;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(5px);
+        }
+
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .typing-indicator span {
+            height: 10px;
+            width: 10px;
+            float: left;
+            margin: 0 1px;
+            background-color: var(--accenture-purple);
+            display: block;
+            border-radius: 50%;
+            opacity: 0.4;
+        }
+
+        .typing-indicator span:nth-of-type(1) {
+            animation: 1s blink infinite 0.3333s;
+        }
+
+        .typing-indicator span:nth-of-type(2) {
+            animation: 1s blink infinite 0.6666s;
+        }
+
+        .typing-indicator span:nth-of-type(3) {
+            animation: 1s blink infinite 0.9999s;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 1;
+            }
+        }
+        a[href="/update-instructions-view/"] {
+            background-color: var(--accenture-light-purple);
+            color: white;
+            transition: all 0.3s ease;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        a[href="/update-instructions-view/"]:hover {
+            background-color: var(--accenture-purple);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <canvas id="background-animation"></canvas>
+    <div class="container mx-auto p-4 max-w-4xl">
+        <h1 class="text-4xl font-bold mb-6 text-center text-gray-100">Nexus AI</h1>
+        <a href="/update-instructions-view/" class="mb-6 inline-block bg-gray-800 hover:bg-gray-900 text-white px-6 py-3 rounded-lg transition duration-300 text-sm uppercase tracking-wider font-semibold">システム仕様を更新</a>
+        <div id="current-agent" class="current-agent">
+            <div class="agent-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="50" height="50">
+                    <circle cx="12" cy="12" r="11" fill="#A100FF" />
+                    <g fill="#FFFFFF">
+                        <!-- Center agent -->
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M12 16.5v2.5" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+                        
+                        <!-- Left agent -->
+                        <circle cx="6" cy="12" r="2.5" />
+                        <path d="M6 15.5v2" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" />
+                        
+                        <!-- Right agent -->
+                        <circle cx="18" cy="12" r="2.5" />
+                        <path d="M18 15.5v2" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" />
+                        
+                        <!-- Top agent -->
+                        <circle cx="12" cy="6" r="2.5" />
+                        <path d="M12 9.5v2" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" />
+                    </g>
+                </svg>
+            </div>
+            <div class="agent-info">
+                <div class="agent-label">現在のエージェント</div>
+                <div class="agent-name">在庫管理システム担当</div>
+            </div>
+        </div>
+        <div class="chat-container">
+            <div id="chat-messages" class="chat-messages space-y-4"></div>
+            <div id="typing-indicator" class="hidden"></div>
+            <form id="chat-form" class="flex">
+                <input type="text" id="user-input" class="flex-grow rounded-l-lg px-4 py-3 focus:outline-none" placeholder="質問を入力してください">
+                <button type="submit" class="submit-button text-white px-8 py-3 rounded-r-lg transition duration-300">送信</button>
+            </form>
+        </div>
+    </div>
+    <script>
+        const chatMessages = document.getElementById('chat-messages');
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const currentAgentDisplay = document.getElementById('current-agent');
+        let currentAgent = '在庫管理システム';
+
+        marked.setOptions({
+            breaks: true,
+            gfm: true
+        });
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            if (message) {
+                addMessage('user', message);
+                userInput.value = '';
+                showTypingIndicator();
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+
+                try {
+                    const response = await sendMessage(message);
+                    
+                    if (response.agent_name !== currentAgent) {
+                        await handleAgentTransfer(currentAgent, response.agent_name);
+                    }
+                    
+                    hideTypingIndicator();
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    addMessage(response.agent_name, response.message);
+                } catch (error) {
+                    console.error('Error:', error);
+                    hideTypingIndicator();
+                    addMessage('システム', 'エラーが発生しました。もう一度お試しください。');
+                }
+            }
+        });
+
+        async function handleAgentTransfer(fromAgent, toAgent) {
+            addAgentTransfer(fromAgent, toAgent);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // 転送メッセージ表示後2秒待機
+            currentAgent = toAgent;
+            updateCurrentAgentDisplay();
+            showTypingIndicator(); // 新しいエージェントのタイピングを表示
+            await new Promise(resolve => setTimeout(resolve, 2000)); // さらに2秒待機
+        }
+
+        function addMessage(sender, content) {
+            const messageElement = document.createElement('div');
+            messageElement.className = `message ${sender === 'user' ? 'user-message' : 'agent-message'}`;
+            const sanitizedContent = DOMPurify.sanitize(marked.parse(content));
+            messageElement.innerHTML = `
+                <div class="font-bold mb-2">${sender === 'user' ? 'あなた' : sender}</div>
+                <div class="message-content">${sanitizedContent}</div>
+            `;
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function addAgentTransfer(fromAgent, toAgent) {
+            const transferElement = document.createElement('div');
+            transferElement.className = 'agent-transfer';
+            transferElement.textContent = `${fromAgent}から${toAgent}に転送しています...`;
+            chatMessages.appendChild(transferElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function updateCurrentAgentDisplay() {
+            const agentNameElement = currentAgentDisplay.querySelector('.agent-name');
+            agentNameElement.textContent = currentAgent + "担当";
+            
+            // ハイライトアニメーションを追加
+            currentAgentDisplay.classList.add('highlight-animation');
+
+            // アニメーション終了後、クラスを削除
+            setTimeout(() => {
+                currentAgentDisplay.classList.remove('highlight-animation');
+            }, 1000); // アニメーションの長さと同じ1秒後に実行
+        }
+
+        function showTypingIndicator() {
+            typingIndicator.innerHTML = `
+                <div class="agent-message message">
+                    <div class="typing-indicator">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            `;
+            typingIndicator.classList.remove('hidden');
+        }
+
+        function hideTypingIndicator() {
+            typingIndicator.classList.add('hidden');
+        }
+
+        async function sendMessage(message) {
+            const response = await axios.post('/chat/', {
+                message: message,
+                current_agent: currentAgent
+            });
+            return response.data;
+        }
+
+        // 背景アニメーション
+        const canvas = document.getElementById('background-animation');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const particles = [];
+        const particleCount = 50;
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 5 + 1;
+                this.speedX = Math.random() * 3 - 1.5;
+                this.speedY = Math.random() * 3 - 1.5;
+                this.color = this.getRandomColor();
+            }
+
+            getRandomColor() {
+                const colors = [
+                    'rgba(161, 0, 255, 0.6)',  // 濃い紫
+                    'rgba(184, 75, 255, 0.6)', // 濃いライトパープル
+                    'rgba(111, 0, 179, 0.6)',  // 濃いダークパープル
+                    'rgba(200, 191, 231, 0.6)', // 濃いラベンダー
+                    'rgba(230, 230, 250, 0.6)'  // 濃いラベンダーブラッシュ
+                ];
+                return colors[Math.floor(Math.random() * colors.length)];
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+
+                if (this.size > 0.2) this.size -= 0.1;
+
+                if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
+                if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function init() {
+            for (let i = 0; i < particleCount; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+
+                for (let j = i; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < 100) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = particles[i].color;
+                        ctx.lineWidth = 0.2;
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                        ctx.closePath();
+                    }
+                }
+
+                if (particles[i].size <= 0.2) {
+                    particles.splice(i, 1);
+                    i--;
+                    particles.push(new Particle());
+                }
+            }
+            requestAnimationFrame(animate);
+        }
+
+        init();
+        animate();
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            init();
+        });
+    </script>
+</body>
+</html>
